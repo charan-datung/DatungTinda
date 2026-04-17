@@ -1,10 +1,17 @@
-// TODO: Server-side Supabase client — use createServerClient from @supabase/ssr with cookie store
-
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "./types";
 
-export async function createClient() {
+/**
+ * Creates a server-side Supabase client that reads/writes cookies via
+ * next/headers. Must be called inside a Server Component, Server Action,
+ * or Route Handler — not in Client Components.
+ *
+ * Cookie writes are wrapped in try/catch because Server Components cannot
+ * set cookies; only Server Actions and Route Handlers can.
+ */
+export async function createClient(): Promise<SupabaseClient<Database>> {
   const cookieStore = await cookies();
 
   return createServerClient<Database>(
@@ -16,9 +23,14 @@ export async function createClient() {
           return cookieStore.getAll();
         },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) =>
-            cookieStore.set(name, value, options)
-          );
+          try {
+            cookiesToSet.forEach(({ name, value, options }) =>
+              cookieStore.set(name, value, options)
+            );
+          } catch {
+            // Swallowed in Server Components — the proxy refreshes
+            // the session so the browser always has an up-to-date token.
+          }
         },
       },
     }
